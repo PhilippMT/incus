@@ -22,6 +22,10 @@ Those packages are built for:
 
 All  packages are built for both `amd64` (Intel/AMD 64bit) and `arm64` (Arm 64bit).
 
+Each build also publishes its `.deb` files as an OCI image in the GitHub Container Registry. Image tags are `<branch-slug>-<distribution>-<architecture>`, for example `feature-ubuntu-24.04-amd64`, under `ghcr.io/philippmt/incus-packages`. The image contains the package files under `/packages`; pull and extract it with an OCI-compatible container tool.
+
+GitHub Container Registry does not provide an HTTP APT repository endpoint, so these images cannot be used directly in an APT source list. Serving an APT repository requires a separate HTTP repository host.
+
 NOTE: It is often possible to use those packages on other non-LTS Ubuntu releases by picking the closest LTS release prior to the Ubuntu version being run.
 
 ## Installation
