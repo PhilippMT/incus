@@ -16,6 +16,7 @@ Those packages are built for:
 * Ubuntu 22.04 LTS (`jammy`)
 * Ubuntu 24.04 LTS (`noble`)
 * Ubuntu 26.04 LTS (`resolute`)
+* Ubuntu 26.10 (`stonking`)
 * Debian 12 (`bookworm`)
 * Debian 13 (`trixie`)
 
