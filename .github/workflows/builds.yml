@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: ${{ github.ref }}
@@ -22,6 +23,7 @@ jobs:
           - ubuntu-22.04
           - ubuntu-24.04
           - ubuntu-26.04
+          - ubuntu-26.10
           - debian-12
           - debian-13
         arch:
@@ -157,7 +159,7 @@ jobs:
             xmlto \
             xorriso
 
-          if [ "${OS_NAME}" = "debian-13" ] || [ "${OS_NAME}" = "ubuntu-26.04" ]; then
+          if [ "${OS_NAME}" = "debian-13" ] || [ "${OS_NAME}" = "ubuntu-26.04" ] || [ "${OS_NAME}" = "ubuntu-26.10" ]; then
             sudo apt-get install --no-install-recommends --yes \
                 libdrm-dev \
                 libegl1-mesa-dev \
@@ -230,7 +232,7 @@ jobs:
           bg git clone https://gitlab.com/qemu-project/seabios /build/seabios --depth 1 -b "${SEABIOS_TAG}"
           bg git clone https://gitlab.com/virtio-fs/virtiofsd /build/virtiofsd --depth 1 -b "${VIRTIOFSD_TAG}"
 
-          if [ "${OS_NAME}" = "debian-13" ] || [ "${OS_NAME}" = "ubuntu-26.04" ]; then
+          if [ "${OS_NAME}" = "debian-13" ] || [ "${OS_NAME}" = "ubuntu-26.04" ] || [ "${OS_NAME}" = "ubuntu-26.10" ]; then
             bg git clone https://gitlab.freedesktop.org/virgl/virglrenderer /build/virglrenderer --depth 1 -b "${VIRGLRENDERER_TAG}"
           fi
 
@@ -631,7 +633,7 @@ jobs:
           go build -o "/opt/incus/bin/truenas_incus_ctl" truenas/truenas_incus_ctl
 
       - name: Build virglrenderer
-        if: ${{ matrix.os == 'debian-13' || matrix.os == 'ubuntu-26.04' }}
+        if: ${{ matrix.os == 'debian-13' || matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.10' }}
         run: |
           cd /build/virglrenderer
 
@@ -658,7 +660,7 @@ jobs:
           sed -i "/subdir('tests')/d" meson.build
 
           opengl=""
-          if [ "${OS_NAME}" = "debian-13" ] || [ "${OS_NAME}" = "ubuntu-26.04" ]; then
+          if [ "${OS_NAME}" = "debian-13" ] || [ "${OS_NAME}" = "ubuntu-26.04" ] || [ "${OS_NAME}" = "ubuntu-26.10" ]; then
             opengl="--enable-opengl --enable-virglrenderer"
           fi
 
@@ -765,6 +767,7 @@ jobs:
           [ "${PKGOS}" = "ubuntu-22.04" ] && CODENAME=jammy
           [ "${PKGOS}" = "ubuntu-24.04" ] && CODENAME=noble
           [ "${PKGOS}" = "ubuntu-26.04" ] && CODENAME=resolute
+          [ "${PKGOS}" = "ubuntu-26.10" ] && CODENAME=stonking
 
           mkdir -p \
             pkg/ \
@@ -809,7 +812,7 @@ jobs:
 
           cd pkg
 
-          if [ "${PKGOS}" = "debian-13" ] || [ "${PKGOS}" = "ubuntu-24.04" ] || [ "${PKGOS}" = "ubuntu-26.04" ]; then
+          if [ "${PKGOS}" = "debian-13" ] || [ "${PKGOS}" = "ubuntu-24.04" ] || [ "${PKGOS}" = "ubuntu-26.04" ] || [ "${PKGOS}" = "ubuntu-26.10" ]; then
             sed -i debian/control \
               -e "s/LIBPNG16/libpng16-16t64/g" \
               -e "s/LIBUSBREDIRPARSER1/libusbredirparser1t64/g" \
@@ -817,7 +820,7 @@ jobs:
               -e "s/LIBBTRFS0/libbtrfs0t64/g" \
               -e "s/LIBUV1/libuv1t64/g"
 
-            if [ "${PKGOS}" = "ubuntu-26.04" ]; then
+            if [ "${PKGOS}" = "ubuntu-26.04" ] || [ "${PKGOS}" = "ubuntu-26.10" ]; then
               sed -i debian/control \
                 -e "s/LIBGPGME11/libgpgme45/g"
             else
@@ -834,7 +837,7 @@ jobs:
               -e "s/LIBUV1/libuv1/g"
           fi
 
-          if [ "${PKGOS}" = "debian-13" ] || [ "${PKGOS}" = "ubuntu-26.04" ]; then
+          if [ "${PKGOS}" = "debian-13" ] || [ "${PKGOS}" = "ubuntu-26.04" ] || [ "${PKGOS}" = "ubuntu-26.10" ]; then
             sed -i debian/control \
               -e "s/LIBFUSE3/libfuse3-4/g"
           else
@@ -842,7 +845,7 @@ jobs:
               -e "s/LIBFUSE3/libfuse3-3/g"
           fi
 
-          if [ "${PKGOS}" = "ubuntu-26.04" ]; then
+          if [ "${PKGOS}" = "ubuntu-26.04" ] || [ "${PKGOS}" = "ubuntu-26.10" ]; then
             sed -i debian/control \
               -e "s/LIBNET1/libnet9/g"
           else
@@ -850,7 +853,7 @@ jobs:
               -e "s/LIBNET1/libnet1/g"
           fi
 
-          if [ "${PKGOS}" = "debian-13" ] || [ "${PKGOS}" = "ubuntu-26.04" ]; then
+          if [ "${PKGOS}" = "debian-13" ] || [ "${PKGOS}" = "ubuntu-26.04" ] || [ "${PKGOS}" = "ubuntu-26.10" ]; then
             sed -i debian/control \
               -e "s/^  LIBVIRGL,$/  libdrm-amdgpu1,\n  libdrm2,\n  libegl1,\n  libepoxy0,\n  libgbm1,/"
             echo "opt/incus/lib/libvirglrenderer.so*" >> debian/incus.install
@@ -876,3 +879,37 @@ jobs:
         with:
           name: ${{ matrix.os }}-${{ matrix.arch }}
           path: out/*
+
+      - name: Prepare package image tag
+        id: package-image
+        env:
+          OS: ${{ matrix.os }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          IMAGE_NAME="ghcr.io/${GITHUB_REPOSITORY,,}-packages"
+          BRANCH_SLUG="$(printf '%s' "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_.-]+/-/g; s/^[.-]+//; s/[.-]+$//' | cut -c1-80)"
+          if [ -z "${BRANCH_SLUG}" ]; then
+            BRANCH_SLUG=branch
+          fi
+
+          echo "name=${IMAGE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${BRANCH_SLUG}-${OS}-${ARCH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.10.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish package image
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: out
+          file: .github/package-image.Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: true
+          tags: ${{ steps.package-image.outputs.name }}:${{ steps.package-image.outputs.tag }}
